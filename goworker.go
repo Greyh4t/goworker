@@ -29,6 +29,7 @@ type WorkerSettings struct {
 	Interval       intervalFlag
 	Concurrency    int
 	Connections    int
+	Poller         int
 	URI            string
 	Namespace      string
 	ExitOnComplete bool
@@ -121,13 +122,13 @@ func Work() error {
 	}
 	defer Close()
 
-	quit := signals()
+	ctx := signals()
 
 	poller, err := newPoller(workerSettings.Queues, workerSettings.IsStrict)
 	if err != nil {
 		return err
 	}
-	jobs := poller.poll(time.Duration(workerSettings.Interval), quit)
+	jobs := poller.poll(workerSettings.Poller, time.Duration(workerSettings.Interval), ctx)
 
 	var monitor sync.WaitGroup
 

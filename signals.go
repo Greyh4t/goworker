@@ -39,13 +39,14 @@
 package goworker
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
 )
 
-func signals() <-chan bool {
-	quit := make(chan bool)
+func signals() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
 		signals := make(chan os.Signal)
@@ -55,8 +56,8 @@ func signals() <-chan bool {
 		defer signalStop(signals)
 
 		<-signals
-		quit <- true
+		cancel()
 	}()
 
-	return quit
+	return ctx
 }

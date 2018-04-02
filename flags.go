@@ -107,6 +107,8 @@ func init() {
 
 	flag.IntVar(&workerSettings.Connections, "connections", 2, "the maximum number of connections to the Redis database")
 
+	flag.IntVar(&workerSettings.Poller, "poller", 1, "the number of poller to get job")
+
 	redisProvider := os.Getenv("REDIS_PROVIDER")
 	var redisEnvURI string
 	if redisProvider != "" {
@@ -136,6 +138,10 @@ func flags() error {
 	if err := workerSettings.Interval.SetFloat(workerSettings.IntervalFloat); err != nil {
 		return err
 	}
+	if workerSettings.Poller < 1 {
+		workerSettings.Poller = 1
+	}
+
 	workerSettings.IsStrict = strings.IndexRune(workerSettings.QueuesString, '=') == -1
 
 	if !workerSettings.UseNumber {

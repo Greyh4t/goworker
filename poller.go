@@ -2,14 +2,17 @@ package goworker
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 	"time"
 )
 
 type poller struct {
 	process
-	isStrict bool
+	isStrict    bool
+	pollerCount int64
 }
 
 func newPoller(queues []string, isStrict bool) (*poller, error) {
@@ -51,7 +54,7 @@ func (p *poller) getJob(conn *RedisConn) (*Job, error) {
 	return nil, nil
 }
 
-func (p *poller) poll(interval time.Duration, quit <-chan bool) <-chan *Job {
+func (p *poller) poll(pollerNum int, interval time.Duration, ctx context.Context) <-chan *Job {
 	jobs := make(chan *Job)
 
 	conn, err := GetConn()
@@ -65,79 +68,83 @@ func (p *poller) poll(interval time.Duration, quit <-chan bool) <-chan *Job {
 		PutConn(conn)
 	}
 
-	go func() {
-		defer func() {
-			close(jobs)
+	p.pollerCount = int64(pollerNum)
 
-			conn, err := GetConn()
-			if err != nil {
-				logger.Criticalf("Error on getting connection in poller %s: %v", p, err)
-				return
-			} else {
-				p.finish(conn)
-				p.close(conn)
-				PutConn(conn)
-			}
-		}()
-
-		for {
-			select {
-			case <-quit:
-				return
-			default:
+	for i := 0; i < pollerNum; i++ {
+		go func() {
+			defer func() {
+				if atomic.AddInt64(&p.pollerCount, -1) == 0 {
+					close(jobs)
+				}
 				conn, err := GetConn()
 				if err != nil {
 					logger.Criticalf("Error on getting connection in poller %s: %v", p, err)
 					return
-				}
-
-				job, err := p.getJob(conn)
-				if err != nil {
-					logger.Criticalf("Error on %v getting job from %v: %v", p, p.Queues, err)
+				} else {
+					p.finish(conn)
+					p.close(conn)
 					PutConn(conn)
+				}
+			}()
+
+			for {
+				select {
+				case <-ctx.Done():
 					return
-				}
-				if job != nil {
-					conn.Send("INCR", fmt.Sprintf("%sstat:processed:%v", workerSettings.Namespace, p))
-					conn.Flush()
-					PutConn(conn)
-					select {
-					case jobs <- job:
-					case <-quit:
-						buf, err := json.Marshal(job.Payload)
-						if err != nil {
-							logger.Criticalf("Error requeueing %v: %v", job, err)
-							return
-						}
-						conn, err := GetConn()
-						if err != nil {
-							logger.Criticalf("Error on getting connection in poller %s: %v", p, err)
-							return
-						}
+				default:
+					conn, err := GetConn()
+					if err != nil {
+						logger.Criticalf("Error on getting connection in poller %s: %v", p, err)
+						return
+					}
 
-						conn.Send("LPUSH", fmt.Sprintf("%squeue:%s", workerSettings.Namespace, job.Queue), buf)
-						conn.Flush()
+					job, err := p.getJob(conn)
+					if err != nil {
+						logger.Criticalf("Error on %v getting job from %v: %v", p, p.Queues, err)
 						PutConn(conn)
 						return
 					}
-				} else {
-					PutConn(conn)
-					if workerSettings.ExitOnComplete {
-						return
-					}
-					logger.Debugf("Sleeping for %v", interval)
-					logger.Debugf("Waiting for %v", p.Queues)
+					if job != nil {
+						conn.Send("INCR", fmt.Sprintf("%sstat:processed:%v", workerSettings.Namespace, p))
+						conn.Flush()
+						PutConn(conn)
+						select {
+						case jobs <- job:
+						case <-ctx.Done():
+							buf, err := json.Marshal(job.Payload)
+							if err != nil {
+								logger.Criticalf("Error requeueing %v: %v", job, err)
+								return
+							}
+							conn, err := GetConn()
+							if err != nil {
+								logger.Criticalf("Error on getting connection in poller %s: %v", p, err)
+								return
+							}
 
-					timeout := time.After(interval)
-					select {
-					case <-quit:
-						return
-					case <-timeout:
+							conn.Send("LPUSH", fmt.Sprintf("%squeue:%s", workerSettings.Namespace, job.Queue), buf)
+							conn.Flush()
+							PutConn(conn)
+							return
+						}
+					} else {
+						PutConn(conn)
+						if workerSettings.ExitOnComplete {
+							return
+						}
+						logger.Debugf("Sleeping for %v", interval)
+						logger.Debugf("Waiting for %v", p.Queues)
+
+						timeout := time.After(interval)
+						select {
+						case <-ctx.Done():
+							return
+						case <-timeout:
+						}
 					}
 				}
 			}
-		}
-	}()
-
+		}()
+	}
 	return jobs
 }
