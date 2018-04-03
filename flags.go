@@ -107,8 +107,6 @@ func init() {
 
 	flag.IntVar(&workerSettings.Connections, "connections", 2, "the maximum number of connections to the Redis database")
 
-	flag.IntVar(&workerSettings.Poller, "poller", 1, "the number of poller to get job")
-
 	redisProvider := os.Getenv("REDIS_PROVIDER")
 	var redisEnvURI string
 	if redisProvider != "" {
