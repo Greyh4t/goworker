@@ -114,8 +114,9 @@ func (w *worker) work(jobs <-chan *Job, monitor *sync.WaitGroup) {
 
 				conn, err := GetConn()
 				if err != nil {
-					logger.Criticalf("Error on getting connection in worker %v: %v", w, err)
-					return
+					//					logger.Criticalf("Error on getting connection in worker %v: %v", w, err)
+					logger.Errorf("Error on getting connection in worker %v: %v", w, err)
+					//					return
 				} else {
 					w.finish(conn, job, errors.New(errorLog))
 					PutConn(conn)
@@ -130,11 +131,12 @@ func (w *worker) run(job *Job, workerFunc workerFunc) {
 	defer func() {
 		conn, errCon := GetConn()
 		if errCon != nil {
-			logger.Criticalf("Error on getting connection in worker on finish %v: %v", w, errCon)
-			return
+			//			logger.Criticalf("Error on getting connection in worker on finish %v: %v", w, errCon)
+			logger.Errorf("Error on getting connection in worker on finish %v: %v", w, errCon)
 		} else {
 			w.finish(conn, job, err)
 			PutConn(conn)
+			return
 		}
 	}()
 	defer func() {
@@ -145,8 +147,9 @@ func (w *worker) run(job *Job, workerFunc workerFunc) {
 
 	conn, err := GetConn()
 	if err != nil {
-		logger.Criticalf("Error on getting connection in worker on start %v: %v", w, err)
-		return
+		//		logger.Criticalf("Error on getting connection in worker on start %v: %v", w, err)
+		//		return
+		logger.Errorf("Error on getting connection in worker on start %v: %v", w, err)
 	} else {
 		w.start(conn, job)
 		PutConn(conn)

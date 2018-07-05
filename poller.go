@@ -94,15 +94,21 @@ func (p *poller) poll(pollerNum int, interval time.Duration, ctx context.Context
 				default:
 					conn, err := GetConn()
 					if err != nil {
-						logger.Criticalf("Error on getting connection in poller %s: %v", p, err)
-						return
+						//						logger.Criticalf("Error on getting connection in poller %s: %v", p, err)
+						//						return
+						logger.Errorf("Error on getting connection in poller %s: %v", p, err)
+						continue
 					}
 
 					job, err := p.getJob(conn)
 					if err != nil {
-						logger.Criticalf("Error on %v getting job from %v: %v", p, p.Queues, err)
-						PutConn(conn)
-						return
+						//						logger.Criticalf("Error on %v getting job from %v: %v", p, p.Queues, err)
+						//						PutConn(conn)
+						//						return
+						logger.Errorf("Error on %v getting job from %v: %v", p, p.Queues, err)
+						conn.Close()
+						PutConn(nil)
+						continue
 					}
 					if job != nil {
 						conn.Send("INCR", fmt.Sprintf("%sstat:processed:%v", workerSettings.Namespace, p))
