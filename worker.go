@@ -115,8 +115,8 @@ func (w *worker) work(jobs <-chan *Job, monitor *sync.WaitGroup) {
 				conn, err := GetConn()
 				if err != nil {
 					//					logger.Criticalf("Error on getting connection in worker %v: %v", w, err)
-					logger.Errorf("Error on getting connection in worker %v: %v", w, err)
 					//					return
+					logger.Errorf("Error on getting connection in worker %v: %v", w, err)
 				} else {
 					w.finish(conn, job, errors.New(errorLog))
 					PutConn(conn)
@@ -136,7 +136,6 @@ func (w *worker) run(job *Job, workerFunc workerFunc) {
 		} else {
 			w.finish(conn, job, err)
 			PutConn(conn)
-			return
 		}
 	}()
 	defer func() {
