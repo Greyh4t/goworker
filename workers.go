@@ -27,45 +27,17 @@ func Enqueue(job *Job) error {
 		return err
 	}
 
-	conn, err := GetConn()
-	if err != nil {
-		//		logger.Criticalf("Error on getting connection on enqueue")
-		logger.Errorf("Error on getting connection on enqueue")
-		return err
-	}
-	//	defer PutConn(conn)
-
 	buffer, err := json.Marshal(job.Payload)
 	if err != nil {
-		logger.Criticalf("Cant marshal payload on enqueue")
-		PutConn(conn)
+		logger.Error("Cant marshal payload on enqueue")
 		return err
 	}
 
-	err = conn.Send("RPUSH", fmt.Sprintf("%squeue:%s", workerSettings.Namespace, job.Queue), buffer)
+	err = redisClient.RPush(fmt.Sprintf("%squeue:%s", workerSettings.Namespace, job.Queue), buffer).Err()
 	if err != nil {
-		//		logger.Criticalf("Cant push to queue")
-		logger.Errorf("Cant push to queue")
-		conn.Close()
-		PutConn(nil)
+		logger.Error("Cant push to queue")
 		return err
 	}
 
-	err = conn.Send("SADD", fmt.Sprintf("%squeues", workerSettings.Namespace), job.Queue)
-	if err != nil {
-		//		logger.Criticalf("Cant register queue to list of use queues")
-		logger.Errorf("Cant register queue to list of use queues")
-		conn.Close()
-		PutConn(nil)
-		return err
-	}
-
-	err = conn.Flush()
-	if err != nil {
-		conn.Close()
-		PutConn(nil)
-		return err
-	}
-	PutConn(conn)
 	return nil
 }

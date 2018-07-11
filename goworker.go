@@ -6,16 +6,14 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"github.com/Greyh4t/glog"
 
-	"github.com/cihub/seelog"
-	"github.com/youtube/vitess/go/pools"
+	"gopkg.in/redis.v5"
 )
 
 var (
-	logger      seelog.LoggerInterface
-	pool        *pools.ResourcePool
-	ctx         context.Context
+	logger      *glog.Logger
+	redisClient *redis.Client
 	initMutex   sync.Mutex
 	initialized bool
 )
@@ -49,45 +47,21 @@ func Init() error {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	if !initialized {
-		var err error
-		logger, err = seelog.LoggerFromWriterWithMinLevel(os.Stdout, seelog.InfoLvl)
+		logger = glog.New(os.Stdout).SetFlags(glog.Lshortfile | glog.LstdFlags).SetLevel(glog.LevelInfo)
+
+		err := flags()
 		if err != nil {
 			return err
 		}
 
-		if err := flags(); err != nil {
+		redisClient, err = newRedisClient(workerSettings.URI, workerSettings.Connections)
+		if err != nil {
 			return err
 		}
-		ctx = context.Background()
-
-		pool = newRedisPool(workerSettings.URI, workerSettings.Connections, workerSettings.Connections, time.Minute)
 
 		initialized = true
 	}
 	return nil
-}
-
-// GetConn returns a connection from the goworker Redis
-// connection pool. When using the pool, check in
-// connections as quickly as possible, because holding a
-// connection will cause concurrent worker functions to lock
-// while they wait for an available connection. Expect this
-// API to change drastically.
-func GetConn() (*RedisConn, error) {
-	resource, err := pool.Get(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	return resource.(*RedisConn), nil
-}
-
-// PutConn puts a connection back into the connection pool.
-// Run this as soon as you finish using a connection that
-// you got from GetConn. Expect this API to change
-// drastically.
-func PutConn(conn *RedisConn) {
-	pool.Put(conn)
 }
 
 // Close cleans up resources initialized by goworker. This
@@ -105,7 +79,7 @@ func Close() {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	if initialized {
-		pool.Close()
+		redisClient.Close()
 		initialized = false
 	}
 }

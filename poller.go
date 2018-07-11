@@ -11,8 +11,7 @@ import (
 
 type poller struct {
 	process
-	isStrict    bool
-	pollerCount int64
+	isStrict bool
 }
 
 func newPoller(queues []string, isStrict bool) (*poller, error) {
@@ -26,20 +25,21 @@ func newPoller(queues []string, isStrict bool) (*poller, error) {
 	}, nil
 }
 
-func (p *poller) getJob(conn *RedisConn) (*Job, error) {
+func (p *poller) getJob() (*Job, error) {
 	for _, queue := range p.queues(p.isStrict) {
 		logger.Debugf("Checking %s", queue)
 
-		reply, err := conn.Do("LPOP", fmt.Sprintf("%squeue:%s", workerSettings.Namespace, queue))
+		reply, err := redisClient.LPop(fmt.Sprintf("%squeue:%s", workerSettings.Namespace, queue)).Bytes()
 		if err != nil {
 			return nil, err
 		}
+
 		if reply != nil {
 			logger.Debugf("Found job on %s", queue)
 
 			job := &Job{Queue: queue}
 
-			decoder := json.NewDecoder(bytes.NewReader(reply.([]byte)))
+			decoder := json.NewDecoder(bytes.NewReader(reply))
 			if workerSettings.UseNumber {
 				decoder.UseNumber()
 			}
@@ -56,34 +56,14 @@ func (p *poller) getJob(conn *RedisConn) (*Job, error) {
 
 func (p *poller) poll(pollerNum int, interval time.Duration, ctx context.Context) <-chan *Job {
 	jobs := make(chan *Job)
-
-	conn, err := GetConn()
-	if err != nil {
-		logger.Criticalf("Error on getting connection in poller %s: %v", p, err)
-		close(jobs)
-		return jobs
-	} else {
-		p.open(conn)
-		p.start(conn)
-		PutConn(conn)
-	}
-
-	p.pollerCount = int64(pollerNum)
+	pollerCount := int64(pollerNum)
 
 	for i := 0; i < pollerNum; i++ {
 		go func() {
 			defer func() {
-				if atomic.AddInt64(&p.pollerCount, -1) == 0 {
+				// close channel when last poller exit
+				if atomic.AddInt64(&pollerCount, -1) == 0 {
 					close(jobs)
-				}
-				conn, err := GetConn()
-				if err != nil {
-					logger.Criticalf("Error on getting connection in poller %s: %v", p, err)
-					return
-				} else {
-					p.finish(conn)
-					p.close(conn)
-					PutConn(conn)
 				}
 			}()
 
@@ -92,49 +72,28 @@ func (p *poller) poll(pollerNum int, interval time.Duration, ctx context.Context
 				case <-ctx.Done():
 					return
 				default:
-					conn, err := GetConn()
+					job, err := p.getJob()
 					if err != nil {
-						//						logger.Criticalf("Error on getting connection in poller %s: %v", p, err)
-						//						return
-						logger.Errorf("Error on getting connection in poller %s: %v", p, err)
-						continue
-					}
-
-					job, err := p.getJob(conn)
-					if err != nil {
-						//						logger.Criticalf("Error on %v getting job from %v: %v", p, p.Queues, err)
-						//						PutConn(conn)
-						//						return
 						logger.Errorf("Error on %v getting job from %v: %v", p, p.Queues, err)
-						conn.Close()
-						PutConn(nil)
 						continue
 					}
 					if job != nil {
-						conn.Send("INCR", fmt.Sprintf("%sstat:processed:%v", workerSettings.Namespace, p))
-						conn.Flush()
-						PutConn(conn)
 						select {
 						case jobs <- job:
 						case <-ctx.Done():
 							buf, err := json.Marshal(job.Payload)
 							if err != nil {
-								logger.Criticalf("Error requeueing %v: %v", job, err)
-								return
-							}
-							conn, err := GetConn()
-							if err != nil {
-								logger.Criticalf("Error on getting connection in poller %s: %v", p, err)
+								logger.Errorf("Error requeueing %v: %v", job, err)
 								return
 							}
 
-							conn.Send("LPUSH", fmt.Sprintf("%squeue:%s", workerSettings.Namespace, job.Queue), buf)
-							conn.Flush()
-							PutConn(conn)
+							err = redisClient.LPush(fmt.Sprintf("%squeue:%s", workerSettings.Namespace, job.Queue), buf).Err()
+							if err != nil {
+								logger.Errorf("Error requeueing %v: %v", job, err)
+							}
 							return
 						}
 					} else {
-						PutConn(conn)
 						if workerSettings.ExitOnComplete {
 							return
 						}

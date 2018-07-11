@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"os"
 	"strings"
-	"time"
 )
 
 type process struct {
@@ -31,48 +30,6 @@ func newProcess(id string, queues []string) (*process, error) {
 
 func (p *process) String() string {
 	return fmt.Sprintf("%s:%d-%s:%s", p.Hostname, p.Pid, p.ID, strings.Join(p.Queues, ","))
-}
-
-func (p *process) open(conn *RedisConn) error {
-	conn.Send("SADD", fmt.Sprintf("%sworkers", workerSettings.Namespace), p)
-	conn.Send("SET", fmt.Sprintf("%sstat:processed:%v", workerSettings.Namespace, p), "0")
-	conn.Send("SET", fmt.Sprintf("%sstat:failed:%v", workerSettings.Namespace, p), "0")
-	conn.Flush()
-
-	return nil
-}
-
-func (p *process) close(conn *RedisConn) error {
-	logger.Infof("%v shutdown", p)
-	conn.Send("SREM", fmt.Sprintf("%sworkers", workerSettings.Namespace), p)
-	conn.Send("DEL", fmt.Sprintf("%sstat:processed:%s", workerSettings.Namespace, p))
-	conn.Send("DEL", fmt.Sprintf("%sstat:failed:%s", workerSettings.Namespace, p))
-	conn.Flush()
-
-	return nil
-}
-
-func (p *process) start(conn *RedisConn) error {
-	conn.Send("SET", fmt.Sprintf("%sworker:%s:started", workerSettings.Namespace, p), time.Now().String())
-	conn.Flush()
-
-	return nil
-}
-
-func (p *process) finish(conn *RedisConn) error {
-	conn.Send("DEL", fmt.Sprintf("%sworker:%s", workerSettings.Namespace, p))
-	conn.Send("DEL", fmt.Sprintf("%sworker:%s:started", workerSettings.Namespace, p))
-	conn.Flush()
-
-	return nil
-}
-
-func (p *process) fail(conn *RedisConn) error {
-	conn.Send("INCR", fmt.Sprintf("%sstat:failed", workerSettings.Namespace))
-	conn.Send("INCR", fmt.Sprintf("%sstat:failed:%s", workerSettings.Namespace, p))
-	conn.Flush()
-
-	return nil
 }
 
 func (p *process) queues(strict bool) []string {
