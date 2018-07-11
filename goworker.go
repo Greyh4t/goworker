@@ -1,7 +1,6 @@
 package goworker
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"sync"
@@ -95,8 +94,6 @@ func Work() error {
 		return err
 	}
 	defer Close()
-
-	fmt.Printf("%+v\n", workerSettings)
 
 	ctx := signals()
 
