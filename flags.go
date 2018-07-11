@@ -100,9 +100,6 @@ func flags() error {
 	if err := workerSettings.Queues.Set(workerSettings.QueuesString); err != nil {
 		return err
 	}
-	if err := workerSettings.Interval.SetFloat(workerSettings.IntervalFloat); err != nil {
-		return err
-	}
 	if workerSettings.Poller < 1 {
 		workerSettings.Poller = 1
 	}

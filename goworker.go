@@ -1,6 +1,7 @@
 package goworker
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"sync"
@@ -23,8 +24,7 @@ var workerSettings WorkerSettings
 type WorkerSettings struct {
 	QueuesString   string
 	Queues         queuesFlag
-	IntervalFloat  float64
-	Interval       intervalFlag
+	Interval       time.Duration
 	Concurrency    int
 	Connections    int
 	Poller         int
@@ -96,13 +96,15 @@ func Work() error {
 	}
 	defer Close()
 
+	fmt.Printf("%+v\n", workerSettings)
+
 	ctx := signals()
 
 	poller, err := newPoller(workerSettings.Queues, workerSettings.IsStrict)
 	if err != nil {
 		return err
 	}
-	jobs := poller.poll(workerSettings.Poller, time.Duration(workerSettings.Interval), ctx)
+	jobs := poller.poll(workerSettings.Poller, workerSettings.Interval, ctx)
 
 	var monitor sync.WaitGroup
 
