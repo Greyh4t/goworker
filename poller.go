@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"sync/atomic"
 	"time"
+
+	"gopkg.in/redis.v5"
 )
 
 type poller struct {
@@ -30,7 +32,7 @@ func (p *poller) getJob() (*Job, error) {
 		logger.Debugf("Checking %s", queue)
 
 		reply, err := redisClient.LPop(fmt.Sprintf("%squeue:%s", workerSettings.Namespace, queue)).Bytes()
-		if err != nil {
+		if err != nil && err != redis.Nil {
 			return nil, err
 		}
 
