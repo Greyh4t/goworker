@@ -3,7 +3,7 @@ package goworker
 import (
 	"time"
 
-	"gopkg.in/redis.v5"
+	"github.com/go-redis/redis"
 )
 
 func newRedisClient(redisUrl string, poolSize int) (*redis.Client, error) {

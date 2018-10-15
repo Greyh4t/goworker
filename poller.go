@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"gopkg.in/redis.v5"
+	"github.com/go-redis/redis"
 )
 
 type poller struct {

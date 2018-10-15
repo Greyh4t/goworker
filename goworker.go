@@ -1,6 +1,7 @@
 package goworker
 
 import (
+	"context"
 	"os"
 	"strconv"
 	"sync"
@@ -8,14 +9,17 @@ import (
 
 	"github.com/Greyh4t/glog"
 
-	"gopkg.in/redis.v5"
+	"github.com/go-redis/redis"
 )
 
 var (
-	logger      *glog.Logger
-	redisClient *redis.Client
-	initMutex   sync.Mutex
-	initialized bool
+	logger       *glog.Logger
+	redisClient  *redis.Client
+	initMutex    sync.Mutex
+	initialized  bool
+	pollerExited chan int
+	pollerCtx    context.Context
+	pollerCancel context.CancelFunc
 )
 
 var workerSettings WorkerSettings
@@ -58,6 +62,9 @@ func Init() error {
 			return err
 		}
 
+		pollerCtx, pollerCancel = context.WithCancel(context.Background())
+		pollerExited = make(chan int)
+
 		initialized = true
 	}
 	return nil
@@ -79,7 +86,15 @@ func Close() {
 	defer initMutex.Unlock()
 	if initialized {
 		redisClient.Close()
+		close(pollerExited)
 		initialized = false
+	}
+}
+
+func Stop() {
+	if initialized {
+		pollerCancel()
+		<-pollerExited
 	}
 }
 
@@ -95,13 +110,11 @@ func Work() error {
 	}
 	defer Close()
 
-	ctx := signals()
-
 	poller, err := newPoller(workerSettings.Queues, workerSettings.IsStrict)
 	if err != nil {
 		return err
 	}
-	jobs := poller.poll(workerSettings.Poller, workerSettings.Interval, ctx)
+	jobs := poller.poll(workerSettings.Poller, workerSettings.Interval, pollerCtx)
 
 	var monitor sync.WaitGroup
 
