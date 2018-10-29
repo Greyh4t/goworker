@@ -50,8 +50,6 @@ func Init() error {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	if !initialized {
-		logger = glog.New(os.Stdout).SetFlags(glog.Lshortfile | glog.LstdFlags).SetLevel(glog.LevelInfo)
-
 		err := flags()
 		if err != nil {
 			return err
@@ -61,6 +59,8 @@ func Init() error {
 		if err != nil {
 			return err
 		}
+
+		logger = glog.New(os.Stdout).SetFlags(glog.Lshortfile | glog.LstdFlags).SetLevel(glog.LevelInfo)
 
 		pollerCtx, pollerCancel = context.WithCancel(context.Background())
 		pollerExited = make(chan int)

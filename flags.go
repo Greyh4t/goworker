@@ -100,8 +100,17 @@ func flags() error {
 	if err := workerSettings.Queues.Set(workerSettings.QueuesString); err != nil {
 		return err
 	}
+
 	if workerSettings.Poller < 1 {
 		workerSettings.Poller = 1
+	}
+
+	if workerSettings.Concurrency < 1 {
+		workerSettings.Concurrency = 10
+	}
+
+	if workerSettings.Connections < 1 {
+		workerSettings.Connections = 10
 	}
 
 	workerSettings.IsStrict = strings.IndexRune(workerSettings.QueuesString, '=') == -1

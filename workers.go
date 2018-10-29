@@ -41,3 +41,28 @@ func Enqueue(job *Job) error {
 
 	return nil
 }
+
+func EnqueueMoreOne(queue string, payloads ...*Payload) error {
+	if len(payloads) > 0 {
+		err := Init()
+		if err != nil {
+			return err
+		}
+
+		bufferList := make([]interface{}, len(payloads))
+		for i, p := range payloads {
+			bufferList[i], err = json.Marshal(p)
+			if err != nil {
+				logger.Error("Cant marshal payload on enqueue")
+				return err
+			}
+		}
+
+		err = redisClient.RPush(fmt.Sprintf("%squeue:%s", workerSettings.Namespace, queue), bufferList...).Err()
+		if err != nil {
+			logger.Error("Cant push to queue")
+			return err
+		}
+	}
+	return nil
+}

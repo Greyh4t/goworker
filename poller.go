@@ -36,7 +36,7 @@ func (p *poller) getJob() (*Job, error) {
 			return nil, err
 		}
 
-		if reply != nil {
+		if len(reply) > 0 {
 			logger.Debugf("Found job on %s", queue)
 
 			job := &Job{Queue: queue}
