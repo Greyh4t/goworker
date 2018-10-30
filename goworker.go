@@ -29,13 +29,18 @@ type WorkerSettings struct {
 	Queues         queuesFlag
 	Interval       time.Duration
 	Concurrency    int
-	Connections    int
 	Poller         int
 	URI            string
 	Namespace      string
 	ExitOnComplete bool
 	IsStrict       bool
 	UseNumber      bool
+	// redis相关配置
+	Connections  int
+	MaxRetries   int
+	DialTimeout  time.Duration
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
 }
 
 func SetSettings(settings WorkerSettings) {
@@ -55,7 +60,7 @@ func Init() error {
 			return err
 		}
 
-		redisClient, err = newRedisClient(workerSettings.URI, workerSettings.Connections)
+		redisClient, err = newRedisClient(workerSettings.URI)
 		if err != nil {
 			return err
 		}

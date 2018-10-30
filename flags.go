@@ -87,6 +87,7 @@ package goworker
 
 import (
 	"strings"
+	"time"
 )
 
 // Namespace returns the namespace flag for goworker. You
@@ -111,6 +112,18 @@ func flags() error {
 
 	if workerSettings.Connections < 1 {
 		workerSettings.Connections = 10
+	}
+
+	if workerSettings.DialTimeout <= 0 {
+		workerSettings.DialTimeout = time.Second * 5
+	}
+
+	if workerSettings.ReadTimeout <= 0 {
+		workerSettings.ReadTimeout = time.Second * 30
+	}
+
+	if workerSettings.WriteTimeout <= 0 {
+		workerSettings.WriteTimeout = time.Second * 30
 	}
 
 	workerSettings.IsStrict = strings.IndexRune(workerSettings.QueuesString, '=') == -1
