@@ -86,7 +86,8 @@
 package goworker
 
 import (
-	"strings"
+	"errors"
+	"log"
 	"time"
 )
 
@@ -98,12 +99,8 @@ func Namespace() string {
 }
 
 func flags() error {
-	if err := workerSettings.Queues.Set(workerSettings.QueuesString); err != nil {
-		return err
-	}
-
-	if workerSettings.Poller < 1 {
-		workerSettings.Poller = 1
+	if len(workerSettings.Queues) == 0 {
+		return errors.New("you must specify at least one queue")
 	}
 
 	if workerSettings.Concurrency < 1 {
@@ -126,13 +123,23 @@ func flags() error {
 		workerSettings.WriteTimeout = time.Second * 30
 	}
 
-	workerSettings.IsStrict = strings.IndexRune(workerSettings.QueuesString, '=') == -1
+	for i, queue := range workerSettings.Queues {
+		if queue.PerFetchNum < 1 {
+			queue.PerFetchNum = 1
+		}
+
+		if queue.MaxRunningNum < 1 {
+			queue.MaxRunningNum = workerSettings.Concurrency
+		}
+
+		workerSettings.Queues[i] = queue
+	}
 
 	if !workerSettings.UseNumber {
-		logger.Warn("== DEPRECATION WARNING ==")
-		logger.Warn("  Currently, encoding/json decodes numbers as float64.")
-		logger.Warn("  This can cause numbers to lose precision as they are read from the Resque queue.")
-		logger.Warn("  Set the -use-number flag to use json.Number when decoding numbers and remove this warning.")
+		log.Println("== DEPRECATION WARNING ==")
+		log.Println("  Currently, encoding/json decodes numbers as float64.")
+		log.Println("  This can cause numbers to lose precision as they are read from the Resque queue.")
+		log.Println("  Set the UseNumber as true to use json.Number when decoding numbers and remove this warning.")
 	}
 
 	return nil

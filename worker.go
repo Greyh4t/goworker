@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -12,7 +14,7 @@ type worker struct {
 	process
 }
 
-func newWorker(id string, queues []string) (*worker, error) {
+func newWorker(id string, queues []*Queue) (*worker, error) {
 	process, err := newProcess(id, queues)
 	if err != nil {
 		return nil, err
@@ -52,14 +54,15 @@ func (w *worker) work(jobs <-chan *Job, monitor *sync.WaitGroup) {
 		for job := range jobs {
 			if workerFunc, ok := workers[job.Payload.Class]; ok {
 				w.run(job, workerFunc)
-				logger.Debugf("done: (Job{%s} | %s | %v)", job.Queue, job.Payload.Class, job.Payload.Args)
+				atomic.AddInt64(job.runningNum, -1)
 			} else {
+				atomic.AddInt64(job.runningNum, -1)
+
 				errorLog := fmt.Sprintf("No worker for %s in queue %s with args %v", job.Payload.Class, job.Queue, job.Payload.Args)
-				logger.Error(errorLog)
 
 				err := w.fail(job, errors.New(errorLog))
 				if err != nil {
-					logger.Errorf("Error on save failed job in worker %v: %v", w, err)
+					log.Printf("Error on save failed job in worker %v: %v", w, err)
 				}
 			}
 		}
@@ -72,7 +75,7 @@ func (w *worker) run(job *Job, workerFunc workerFunc) {
 		if err != nil {
 			err := w.fail(job, err)
 			if err != nil {
-				logger.Errorf("Error on save failed job in worker %v: %v", w, err)
+				log.Printf("Error on save failed job in worker %v: %v", w, err)
 			}
 		}
 	}()

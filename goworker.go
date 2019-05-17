@@ -2,18 +2,14 @@ package goworker
 
 import (
 	"context"
-	"os"
 	"strconv"
 	"sync"
 	"time"
-
-	"github.com/Greyh4t/glog"
 
 	"github.com/go-redis/redis"
 )
 
 var (
-	logger       *glog.Logger
 	redisClient  *redis.Client
 	initMutex    sync.Mutex
 	initialized  bool
@@ -25,11 +21,9 @@ var (
 var workerSettings WorkerSettings
 
 type WorkerSettings struct {
-	QueuesString   string
-	Queues         queuesFlag
+	Queues         []*Queue
 	Interval       time.Duration
 	Concurrency    int
-	Poller         int
 	URI            string
 	Namespace      string
 	ExitOnComplete bool
@@ -64,8 +58,6 @@ func Init() error {
 		if err != nil {
 			return err
 		}
-
-		logger = glog.New(os.Stdout).SetFlags(glog.Lshortfile | glog.LstdFlags).SetLevel(glog.LevelInfo)
 
 		pollerCtx, pollerCancel = context.WithCancel(context.Background())
 		pollerExited = make(chan int)
@@ -119,7 +111,7 @@ func Work() error {
 	if err != nil {
 		return err
 	}
-	jobs := poller.poll(workerSettings.Poller, workerSettings.Interval, pollerCtx)
+	jobs := poller.poll(workerSettings.Interval, pollerCtx)
 
 	var monitor sync.WaitGroup
 
@@ -132,6 +124,5 @@ func Work() error {
 	}
 
 	monitor.Wait()
-
 	return nil
 }
